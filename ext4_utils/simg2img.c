@@ -142,14 +142,34 @@ int process_fill_chunk(int in, int out, u32 blocks, u32 blk_sz, u32 *crc32)
 	return blocks;
 }
 
-int process_skip_chunk(int out, u32 blocks, u32 blk_sz, u32 *crc32)
+int process_skip_chunk(int out, u32 blocks, u32 blk_sz, u32 *crc32, int write_skip)
 {
 	/* len needs to be 64 bits, as the sparse file specifies the skip amount
 	 * as a 32 bit value of blocks.
 	 */
 	u64 len = (u64)blocks * blk_sz;
+	int ret;
+	int chunk;
 
-	lseek64(out, len, SEEK_CUR);
+	if (write_skip) {
+		/* block device may not support seek operation,
+		 * but lseek64 still succeeds.
+		 * write zeros instead to ensure blocks are 'skipped'.
+		 */
+		memset(copybuf, 0, COPY_BUF_SIZE);
+
+		while (len) {
+			chunk = (len > COPY_BUF_SIZE) ? COPY_BUF_SIZE : len;
+			ret = write_all(out, copybuf, chunk);
+			if (ret != chunk) {
+				fprintf(stderr, "write returned an error writing zero to skip a chunk\n");
+				exit(-1);
+			}
+			len -= chunk;
+		}
+	} else {
+		lseek64(out, len, SEEK_CUR);
+	}
 
 	return blocks;
 }
@@ -184,6 +204,7 @@ int main(int argc, char *argv[])
 	u32 crc32 = 0;
 	u32 total_blocks = 0;
 	int ret;
+	struct stat ofstat;
 
 	if (argc != 3) {
 		usage();
@@ -209,6 +230,10 @@ int main(int argc, char *argv[])
 	} else {
 		if ((out = open(argv[2], O_WRONLY | O_CREAT | O_TRUNC, 0666)) == 0) {
 			fprintf(stderr, "Cannot open output file %s\n", argv[2]);
+			exit(-1);
+		}
+		if (fstat(out, &ofstat) == -1) {
+			fprintf(stderr, "Cannot determine status of output file %s: %s\n", argv[2], strerror(errno));
 			exit(-1);
 		}
 	}
@@ -279,7 +304,8 @@ int main(int argc, char *argv[])
 				exit(-1);
 			}
 			total_blocks += process_skip_chunk(out,
-					 chunk_header.chunk_sz, sparse_header.blk_sz, &crc32);
+					 chunk_header.chunk_sz, sparse_header.blk_sz, &crc32,
+					 S_ISREG(ofstat.st_mode) ? 0 : 1);
 			break;
 		    case CHUNK_TYPE_CRC32:
 			process_crc32_chunk(in, crc32);
@@ -295,8 +321,9 @@ int main(int argc, char *argv[])
 	 * will make the file the correct size.  Make sure the offset is
 	 * computed in 64 bits, and the function called can handle 64 bits.
 	 */
-	if (ftruncate64(out, (u64)total_blocks * sparse_header.blk_sz)) {
-		fprintf(stderr, "Error calling ftruncate() to set the image size\n");
+	if (S_ISREG(ofstat.st_mode) &&
+	    ftruncate64(out, (u64)total_blocks * sparse_header.blk_sz)) {
+		fprintf(stderr, "Error calling ftruncate() to set the image size: %s\n", strerror(errno));
 		exit(-1);
 	}
 
