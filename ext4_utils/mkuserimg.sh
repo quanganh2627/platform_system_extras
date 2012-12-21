@@ -52,9 +52,6 @@ if [ -n "$FC" ]; then
     FCOPT="-S $FC"
 fi
 
-mkdir -p $SRC_DIR/lost+found
-chmod 700 $SRC_DIR/lost+found
-
 MAKE_EXT4FS_CMD="make_ext4fs $ENABLE_SPARSE_IMAGE $FCOPT -l $SIZE -a $MOUNT_POINT $OUTPUT_FILE $SRC_DIR"
 echo $MAKE_EXT4FS_CMD
 $MAKE_EXT4FS_CMD
