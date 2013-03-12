@@ -3,7 +3,7 @@ include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES:= su.c
 
-LOCAL_MODULE:= su
+LOCAL_MODULE:= su-old
 
 LOCAL_FORCE_STATIC_EXECUTABLE := true
 
