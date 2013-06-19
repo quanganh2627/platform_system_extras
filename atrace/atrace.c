@@ -296,12 +296,8 @@ static bool startTrace(bool isRoot)
     return ok;
 }
 
-// Disable tracing in the kernel.
-static void stopTrace(bool isRoot)
+static void resetState(bool isRoot)
 {
-    // Disable tracing.
-    setTracingEnabled(false);
-
     // Set the options back to their defaults.
     setTraceOverwriteEnable(true);
     setSchedSwitchTracingEnable(false);
@@ -316,8 +312,8 @@ static void stopTrace(bool isRoot)
         setDiskTracingEnabled(false);
     }
 
-    // Note that we can't reset the trace buffer size here because that would
-    // clear the trace before we've read it.
+    // Reset the trace buffer size to 1.
+    setTraceBufferSizeKB(1);
 }
 
 // Read the current kernel trace and write it to stdout.
@@ -583,8 +579,8 @@ int main(int argc, char **argv)
         }
     }
 
-    // Stop the trace and restore the default settings.
-    stopTrace(isRoot);
+    // Disable tracing.
+    setTracingEnabled(false);
 
     if (ok) {
         if (!g_traceAborted) {
@@ -600,8 +596,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "unable to start tracing\n");
     }
 
-    // Reset the trace buffer size to 1.
-    setTraceBufferSizeKB(1);
+    resetState(false);
 
     return g_traceAborted ? 1 : 0;
 }
